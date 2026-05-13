@@ -145,7 +145,7 @@ The PSI computation is suppressed below 1,000 logged predictions to avoid empty-
 | `xgb_v3_tuned` | v1 (25) | yes | 0.7040 | 0.2975 | Phase-7 random search; depth-4, 200 trees |
 | **`xgb_v4_interactions`** | **featv2 (32)** | **yes** | **0.7047** | **0.2989** | **Production** — v3 hyperparams + 7 interactions |
 
-Phase-by-phase commentary lives in `notebooks/02_..` through `notebooks/08_..`.
+Full intended-use, limitations, and fair-lending considerations live in [`MODEL_CARD.md`](MODEL_CARD.md). Phase-by-phase commentary lives in `notebooks/02_..` through `notebooks/08_..`.
 
 ## Design choices worth knowing
 
