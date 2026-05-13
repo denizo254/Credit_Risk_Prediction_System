@@ -19,6 +19,8 @@ src/                   Importable modules + smoke tests (one per phase)
   monitor.py           prediction-log analyzer (PSI / reject-rate / Brier)
   _smoke_phase{2..8}.py  end-to-end runners for each phase
 notebooks/             One notebook per CRISP-DM phase, with rationale
+app/
+  streamlit_app.py     Demo UI — single-application scoring with sidebar threshold control
 outputs/
   models/              Trained joblib artifacts (committed)
   figures/             Saved plots from notebook runs
@@ -74,6 +76,19 @@ python src/_smoke_phase8.py   # interactions + xgb_v4_interactions              
 ```
 
 You can also just load the pre-trained models from `outputs/models/` and skip retraining.
+
+## Streamlit demo
+
+A one-click demo UI for the production model — useful for showing recruiters or stakeholders what the model does on a single application:
+
+```bash
+streamlit run app/streamlit_app.py
+# -> http://localhost:8501
+```
+
+Fill in 25 fields (sensible medians pre-filled), hit **Score**, see P(default), the threshold-based decision, the risk band, and how the model's score compares to (a) the LendingClub-published default rate for that grade and (b) the test-set base rate of 27.2%. Threshold is adjustable in the sidebar to let you watch decisions shift in real time.
+
+The demo is the *same* model artifact and feature pipeline as the FastAPI service — it's not a separate model, just a different surface.
 
 ## Running the service
 
