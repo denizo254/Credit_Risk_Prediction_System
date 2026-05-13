@@ -33,7 +33,7 @@ club loan data/        Raw 1.6 GB CSV from LendingClub (gitignored, fetch separa
 
 ```bash
 python -m venv .venv
-.venv\Scripts\activate          # PowerShell:  .venv\Scripts\Activate.ps1
+.venv/Scripts/activate          # PowerShell:  .venv/Scripts/Activate.ps1
 pip install -r requirements.txt
 ```
 
