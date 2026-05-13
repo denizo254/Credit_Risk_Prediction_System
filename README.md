@@ -29,6 +29,20 @@ data/
 club loan data/        Raw 1.6 GB CSV from LendingClub (gitignored, fetch separately)
 ```
 
+## Notebooks
+
+| Notebook | Phase | What it covers |
+|---|---|---|
+| [`02_data_understanding.ipynb`](notebooks/02_data_understanding.ipynb) | 2 | Curated 26-feature load, target derivation, missingness profile, class imbalance, default rate by grade and by year |
+| [`03_data_preparation.ipynb`](notebooks/03_data_preparation.ipynb) | 3 | Type coercion, engineered features, semantic vs statistical imputation, time-based train/test split |
+| [`04_modeling.ipynb`](notebooks/04_modeling.ipynb) | 4 | LR baseline + XGBoost v1; ROC / PR / calibration / score-distribution / feature-importance plots |
+| [`05_evaluation.ipynb`](notebooks/05_evaluation.ipynb) | 5 | Isotonic calibration on held-out 2016, cost-curve threshold selection, per-year & per-grade stability, gains/lift, PSI |
+| [`06_deployment.ipynb`](notebooks/06_deployment.ipynb) | 6 | FastAPI service architecture, batch scoring CLI, monitoring scaffolding, operational playbook |
+| [`07_hyperparameter_tuning.ipynb`](notebooks/07_hyperparameter_tuning.ipynb) | 7 | Random search with time-series CV; Phase-4 defaults ranked 15/15; CV → test gap |
+| [`08_interaction_features.ipynb`](notebooks/08_interaction_features.ipynb) | 8 | 7 underwriting-style interactions; `int_rate_x_term` becomes the #1 feature by gain |
+
+Each notebook calls into the shared `src/` modules — the notebook explains *why*, the module is the *what*. Re-running a notebook end-to-end uses the corresponding `src/_smoke_phase{N}.py` for the heavy lifting.
+
 ## Setup
 
 ```bash
