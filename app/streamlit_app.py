@@ -236,7 +236,10 @@ if submitted:
     with st.expander('Reason codes (table)'):
         st.dataframe(
             pd.DataFrame([
-                {'feature': c.label, 'value': c.value,
+                # value -> string so the column has one Arrow-friendly dtype
+                # (it mixes numbers and category codes like 'C3').
+                {'feature': c.label,
+                 'value': '—' if c.value is None else str(c.value),
                  'contribution': round(c.contribution, 4)}
                 for c in top
             ]),
