@@ -107,6 +107,16 @@ curl -X POST http://127.0.0.1:8000/predict \
 
 The API accepts the 25 base fields (post-Phase-3 cleaned shape). The 7 interactions are computed internally inside the handler, so the request schema stays narrow.
 
+**Reason codes (explainability).** Add `?explain=true` to either `/predict` or `/predict/batch` to get the top features driving each application's risk, as exact TreeSHAP contributions (log-odds; positive = toward default):
+
+```bash
+curl -X POST 'http://127.0.0.1:8000/predict?explain=true' \
+  -H 'Content-Type: application/json' -d '{ ...25 fields... }'
+# response adds:  "reasons": [ {"feature": "int_rate_x_term", "label": "Total interest exposure (rate × term)", "value": 1847.4, "contribution": 0.5247}, ... ]
+```
+
+Reason codes are opt-in so the default response stays lean. Count is configurable via `TOP_N_REASONS` (default 5). These are a technical basis for Reg B adverse-action notices, not a compliant notice on their own — see `MODEL_CARD.md`.
+
 Override defaults at runtime:
 
 ```bash

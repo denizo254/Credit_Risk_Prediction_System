@@ -26,7 +26,7 @@ Documentation for the production credit-risk classifier shipped in this reposito
 - Students of CRISP-DM working through the canonical phases on a real, sizable dataset
 
 ### Out-of-scope use
-- **Production lending decisions at any regulated financial institution** without further work: this model has not been adversarial-tested for fair lending compliance (ECOA, Reg B, FCRA), has not been audited against Reg B / Disparate Impact analyses, and does not include reason codes / adverse action notices required by US lending law.
+- **Production lending decisions at any regulated financial institution** without further work: this model has not been adversarial-tested for fair lending compliance (ECOA, Reg B, FCRA) and has not been audited against Reg B / Disparate Impact analyses. The service can emit per-prediction TreeSHAP reason codes (`POST /predict?explain=true`), but these are a *technical* basis only — they have not been mapped to plain-language principal-reason statements or validated as compliant adverse-action notices.
 - **Borrower populations outside LendingClub's 2007-2018 footprint:** small-business loans, mortgages, auto loans, international markets, post-2018 macroeconomic regimes.
 - **Scoring at any threshold below `t = 0.05` or above `t = 0.50`** without re-running the cost-curve analysis in `notebooks/05_evaluation.ipynb` against the actual business cost matrix.
 
@@ -144,7 +144,7 @@ The training set reflects who LendingClub *accepted* into its loan pipeline from
 ### Decision automation risks
 At `t = 0.13`, the model **rejects 67% of applications it flags as risky**. False rejections deny credit to borrowers who would have repaid. For any production use, this should be paired with:
 - A human-in-the-loop review for borderline scores (e.g., `0.10 ≤ P ≤ 0.20`).
-- Adverse action notices with reason codes (required by US Reg B for any credit denial).
+- Adverse action notices with reason codes (required by US Reg B for any credit denial). The service exposes TreeSHAP reason codes via `?explain=true` as a starting point, but they still need plain-language mapping and principal-reason selection to satisfy Reg B.
 - A periodic audit of approval/rejection rates broken down by available proxy variables.
 
 ## Caveats and recommendations

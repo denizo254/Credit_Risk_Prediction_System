@@ -20,6 +20,7 @@ import streamlit as st
 PROJECT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT / 'src'))
 
+from explain import reason_codes  # noqa: E402
 from features import add_interactions  # noqa: E402
 from models import model_path  # noqa: E402
 from prepare import CATEGORICAL_COLS, load_processed_featv2  # noqa: E402
@@ -209,6 +210,37 @@ if submitted:
             f'Model is **{delta_vs_grade*100:+.1f} pp** more optimistic than '
             f'LendingClub\'s grade-{grade} cohort average. The model thinks this '
             f'is a better-than-typical grade-{grade} applicant.'
+        )
+
+    # ---------- Why this score? (TreeSHAP reason codes) ----------
+    st.markdown('---')
+    st.subheader('Why this score?')
+    st.caption(
+        'Top features driving this application, as exact TreeSHAP contributions '
+        '(log-odds). Bars to the **right** push toward default; to the **left**, '
+        'toward repayment.'
+    )
+
+    contribs = reason_codes(model, X, row=0, top_n=99, positive_only=False)
+    top = sorted(contribs, key=lambda c: abs(c.contribution), reverse=True)[:8]
+    chart_df = (
+        pd.DataFrame({
+            'feature': [c.label for c in top],
+            'contribution (log-odds)': [c.contribution for c in top],
+        })
+        .set_index('feature')
+        .sort_values('contribution (log-odds)')
+    )
+    st.bar_chart(chart_df, horizontal=True)
+
+    with st.expander('Reason codes (table)'):
+        st.dataframe(
+            pd.DataFrame([
+                {'feature': c.label, 'value': c.value,
+                 'contribution': round(c.contribution, 4)}
+                for c in top
+            ]),
+            hide_index=True,
         )
 
     with st.expander('Show the 32-feature row sent to the model'):

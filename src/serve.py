@@ -37,6 +37,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from explain import reason_codes, reason_codes_batch
 from features import add_interactions
 from models import model_path
 from prepare import CATEGORICAL_COLS, load_processed_featv2
@@ -45,6 +46,8 @@ from prepare import CATEGORICAL_COLS, load_processed_featv2
 # Override via env var without code change.
 DECISION_THRESHOLD = float(os.environ.get('DECISION_THRESHOLD', '0.13'))
 MODEL_NAME = os.environ.get('MODEL_NAME', 'xgb_v4_interactions')
+# Number of reason codes returned when a request asks for ?explain=true.
+TOP_N_REASONS = int(os.environ.get('TOP_N_REASONS', '5'))
 
 PROJECT = Path(__file__).resolve().parent.parent
 LOG_DIR = PROJECT / 'outputs' / 'logs'
@@ -108,11 +111,22 @@ class LoanApplication(BaseModel):
     credit_history_years: int | None = Field(default=None, ge=0, le=100)
 
 
+class ReasonCode(BaseModel):
+    """One feature's contribution to this application's risk score (TreeSHAP)."""
+    feature: str
+    label: str
+    value: float | str | None
+    contribution: float   # log-odds; positive pushes toward default
+
+
 class PredictResponse(BaseModel):
     p_default: float
     decision: str   # 'approve' | 'reject'
     threshold: float
     model: str
+    # Populated only when the request is made with ?explain=true. Lists the
+    # top features pushing this application toward default (Reg B reason codes).
+    reasons: list[ReasonCode] | None = None
 
 
 class BatchRequest(BaseModel):
@@ -172,6 +186,15 @@ def _decision(p: float) -> str:
     return 'reject' if p >= DECISION_THRESHOLD else 'approve'
 
 
+def _to_reason_codes(contributions) -> list[ReasonCode]:
+    """Convert explain.Contribution objects into the API response model."""
+    return [
+        ReasonCode(feature=c.feature, label=c.label, value=c.value,
+                   contribution=round(c.contribution, 4))
+        for c in contributions
+    ]
+
+
 def _log_prediction(record: dict, p: float, decision: str) -> None:
     """Append-only JSONL log for offline monitoring."""
     entry = {
@@ -198,7 +221,7 @@ def health():
 
 
 @app.post('/predict', response_model=PredictResponse)
-def predict(app_in: LoanApplication) -> PredictResponse:
+def predict(app_in: LoanApplication, explain: bool = False) -> PredictResponse:
     if ServiceState.model is None:
         raise HTTPException(503, 'model not loaded')
     record = app_in.model_dump()
@@ -206,14 +229,19 @@ def predict(app_in: LoanApplication) -> PredictResponse:
     p = float(ServiceState.model.predict_proba(df)[0, 1])
     decision = _decision(p)
     _log_prediction(record, p, decision)
+    reasons = None
+    if explain:
+        reasons = _to_reason_codes(
+            reason_codes(ServiceState.model, df, row=0, top_n=TOP_N_REASONS)
+        )
     return PredictResponse(
         p_default=p, decision=decision,
-        threshold=DECISION_THRESHOLD, model=MODEL_NAME,
+        threshold=DECISION_THRESHOLD, model=MODEL_NAME, reasons=reasons,
     )
 
 
 @app.post('/predict/batch', response_model=BatchResponse)
-def predict_batch(req: BatchRequest) -> BatchResponse:
+def predict_batch(req: BatchRequest, explain: bool = False) -> BatchResponse:
     if ServiceState.model is None:
         raise HTTPException(503, 'model not loaded')
     if not req.applications:
@@ -225,10 +253,17 @@ def predict_batch(req: BatchRequest) -> BatchResponse:
     decisions = [_decision(p) for p in probs]
     for rec, p, d in zip(records, probs, decisions, strict=False):
         _log_prediction(rec, float(p), d)
+
+    # One SHAP pass over the whole batch (not per-row) when explanations asked.
+    reasons = (
+        [_to_reason_codes(r)
+         for r in reason_codes_batch(ServiceState.model, df, top_n=TOP_N_REASONS)]
+        if explain else [None] * len(probs)
+    )
     return BatchResponse(predictions=[
         PredictResponse(p_default=float(p), decision=d,
-                        threshold=DECISION_THRESHOLD, model=MODEL_NAME)
-        for p, d in zip(probs, decisions, strict=False)
+                        threshold=DECISION_THRESHOLD, model=MODEL_NAME, reasons=rc)
+        for p, d, rc in zip(probs, decisions, reasons, strict=False)
     ])
 
 
