@@ -247,7 +247,9 @@ if submitted:
         )
 
     with st.expander('Show the 32-feature row sent to the model'):
-        st.dataframe(X.T.rename(columns={0: 'value'}))
+        # Cast to str: the transposed column mixes categories and numbers, which
+        # Streamlit can't serialize to Arrow without a warning.
+        st.dataframe(X.T.rename(columns={0: 'value'}).astype(str))
 
 st.markdown('---')
 st.caption(
