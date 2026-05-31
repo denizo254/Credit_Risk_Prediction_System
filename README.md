@@ -171,6 +171,7 @@ Full intended-use, limitations, and fair-lending considerations live in [`MODEL_
 - **Isotonic calibration on a held-out 2016 slice.** Base XGB trains on 2007-2015; isotonic fits on 2016. The base never sees the calibration data, so there's no probability-leakage.
 - **Cost-curve threshold, not 0.5.** The asymmetric cost matrix (FN : FP = 5 : 1) puts the optimum at `t = 0.13` — at this threshold, the model catches 91% of defaults at the price of false-rejecting 67% of those it flags.
 - **Statistical imputation lives inside the sklearn `Pipeline`.** `prepare.py` only does *semantic* imputation (`mort_acc.fillna(0)`) where zero is what the column literally measures when missing. Median imputation for `emp_length` / `dti` / `revol_util` is deferred to the model pipeline so medians are computed per CV fold, not globally.
+- **Data contract at the load→prepare boundary.** `contracts.validate_curated()` runs at the top of `clean()` and checks the curated frame's columns, dtypes, all-null columns, and `0/1` target before any cleaning. An upstream schema change (renamed column, numeric field arriving as text) fails with one legible error listing every violation, instead of a cryptic `KeyError` partway through. Dependency-free — no pandera.
 
 ## Honest caveats
 

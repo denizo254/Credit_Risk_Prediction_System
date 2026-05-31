@@ -20,6 +20,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from contracts import validate_curated
 from load import INTERIM_PARQUET
 
 PROJECT = Path(__file__).resolve().parent.parent
@@ -63,6 +64,9 @@ def _parse_earliest_cr_year(s: pd.Series) -> pd.Series:
 
 def clean(df: pd.DataFrame) -> pd.DataFrame:
     """Apply all Phase 3 cleaning + feature engineering. Pure: no I/O."""
+    # Contract check first: fail fast and legibly if the curated frame's schema
+    # drifted, rather than KeyError-ing partway through cleaning.
+    validate_curated(df)
     out = df.copy()
 
     out['term'] = _parse_term(out['term'])
