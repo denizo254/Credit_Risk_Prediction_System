@@ -77,6 +77,10 @@ class LoanApplication(BaseModel):
     # silently ignoring it (which would score on defaults for the real field).
     model_config = ConfigDict(extra='forbid')
 
+    # Optional caller-supplied id. Not a model feature (dropped before scoring);
+    # logged so realized outcomes can later be joined for performance monitoring.
+    application_id: str | None = Field(default=None, max_length=64)
+
     # Loan
     loan_amnt: float = Field(gt=0, le=100_000)
     term: Literal[36, 60] = Field(description='Loan term in months (36 or 60)')
@@ -199,6 +203,7 @@ def _log_prediction(record: dict, p: float, decision: str) -> None:
     """Append-only JSONL log for offline monitoring."""
     entry = {
         'ts': datetime.now(UTC).isoformat(),
+        'application_id': record.get('application_id'),
         'p_default': p,
         'decision': decision,
         'threshold': DECISION_THRESHOLD,

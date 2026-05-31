@@ -145,6 +145,14 @@ python src/monitor.py --since 2026-05-01
 
 The PSI computation is suppressed below 1,000 logged predictions to avoid empty-bin blow-up.
 
+**Realized performance (when outcomes arrive).** PSI is an early *input*-drift signal that needs no labels. Once loans mature and you have actual outcomes, pass them in to get realized Brier / ROC-AUC / KS overall and by month — the *output*-accuracy signal that says whether to recalibrate or retrain:
+
+```bash
+python src/monitor.py --truth outcomes.csv     # outcomes.csv: application_id,default
+```
+
+This joins logged predictions to outcomes on `application_id` (send one as a field in the scoring request) and reports only the labeled subset, so still-pending loans are simply excluded. Column names are overridable via `--id-col` / `--label-col`.
+
 ## Model lineage
 
 | Model | Features | Calibrated | Test ROC-AUC | Test KS | Notes |

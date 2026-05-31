@@ -8,8 +8,11 @@ production-health signals a risk team would actually look at:
   - Predicted default-rate trend     — daily mean p_default; if it climbs,
                                        either the population is shifting
                                        or the model is drifting.
-  - Brier score (when labels arrive) — needs a separate ground-truth file
-                                       keyed by some application_id.
+  - Realized performance (when labels  — Brier / ROC-AUC / KS, overall and by
+    arrive)                              month, on the subset of predictions
+                                         whose outcomes are supplied via a
+                                         ground-truth file and joined on
+                                         application_id.
 
 Alert thresholds match Phase 5's recommendations:
   - PSI >= 0.25            => SIGNIFICANT drift, trigger retrain
@@ -19,6 +22,8 @@ Alert thresholds match Phase 5's recommendations:
 Usage:
     python monitor.py                       # full report on all logged predictions
     python monitor.py --since 2025-01-01    # window
+    python monitor.py --truth outcomes.csv  # + realized Brier/AUC/KS over time
+                                            #   (outcomes.csv: application_id,default)
 """
 from __future__ import annotations
 
@@ -31,10 +36,11 @@ from pathlib import Path
 import joblib
 import numpy as np
 import pandas as pd
+from sklearn.metrics import brier_score_loss, log_loss, roc_auc_score
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from evaluate import psi
-from models import model_path, split_xy
+from models import ks_statistic, model_path, split_xy
 from prepare import load_processed_featv2
 
 PROJECT = Path(__file__).resolve().parent.parent
@@ -86,8 +92,82 @@ def psi_band(value: float) -> str:
     return 'STABLE'
 
 
-def report(predictions: pd.DataFrame, ref_scores: np.ndarray) -> dict:
-    """Compute the headline monitoring numbers."""
+# -------- Realized performance (ground-truth join) ---------------------------
+
+def load_ground_truth(path: Path, id_col: str = 'application_id',
+                      label_col: str = 'default') -> pd.DataFrame:
+    """Load realized outcomes keyed by application id.
+
+    Accepts CSV or parquet with at least `id_col` and `label_col`. Returns a
+    frame with columns ['application_id', 'actual'] (actual = 0/1).
+    """
+    path = Path(path)
+    if path.suffix == '.parquet':
+        df = pd.read_parquet(path)
+    elif path.suffix in ('.csv', '.txt'):
+        df = pd.read_csv(path)
+    else:
+        raise ValueError(f'Unsupported ground-truth format: {path.suffix}')
+    missing = [c for c in (id_col, label_col) if c not in df.columns]
+    if missing:
+        raise ValueError(f'Ground-truth file missing column(s): {", ".join(missing)}')
+    out = df[[id_col, label_col]].rename(
+        columns={id_col: 'application_id', label_col: 'actual'})
+    out['application_id'] = out['application_id'].astype(str)
+    out['actual'] = out['actual'].astype(int)
+    return out
+
+
+def join_outcomes(predictions: pd.DataFrame, truth: pd.DataFrame) -> pd.DataFrame:
+    """Inner-join logged predictions to realized outcomes on application_id.
+
+    Predictions with no application_id, or with no matching label yet, are
+    dropped — the result is exactly the set we can actually score.
+    """
+    if predictions.empty or 'application_id' not in predictions.columns:
+        return predictions.iloc[:0].assign(actual=pd.Series(dtype='int64'))
+    preds = predictions.dropna(subset=['application_id']).copy()
+    preds['application_id'] = preds['application_id'].astype(str)
+    return preds.merge(truth, on='application_id', how='inner')
+
+
+def realized_metrics(y_true, y_score) -> dict:
+    """Performance on a labeled slice. Brier is always defined; ROC-AUC / KS /
+    log-loss need both classes present, else they're reported as None."""
+    y = np.asarray(y_true).astype(int)
+    p = np.asarray(y_score, dtype=float)
+    m = {
+        'n': int(len(y)),
+        'actual_default_rate': round(float(y.mean()), 4),
+        'mean_p_default': round(float(p.mean()), 4),
+        'brier': round(float(brier_score_loss(y, p)), 4),
+    }
+    if len(np.unique(y)) == 2:
+        m['roc_auc'] = round(float(roc_auc_score(y, p)), 4)
+        m['ks'] = round(float(ks_statistic(y, p)), 4)
+        m['log_loss'] = round(float(log_loss(y, p)), 4)
+    else:
+        m['roc_auc'] = m['ks'] = m['log_loss'] = None
+    return m
+
+
+def realized_monthly(joined: pd.DataFrame) -> pd.DataFrame:
+    """Per-calendar-month realized metrics on the joined slice."""
+    # strftime (not to_period) so tz-aware timestamps don't warn about dropping tz.
+    j = joined.assign(month=joined['ts'].dt.strftime('%Y-%m'))
+    rows = [{'month': month, **realized_metrics(g['actual'], g['p_default'])}
+            for month, g in j.groupby('month')]
+    return pd.DataFrame(rows).set_index('month')
+
+
+def report(predictions: pd.DataFrame, ref_scores: np.ndarray,
+           truth: pd.DataFrame | None = None) -> dict:
+    """Compute the headline monitoring numbers.
+
+    If `truth` (a ground-truth frame from `load_ground_truth`) is supplied,
+    realized performance is computed on the subset of predictions whose
+    outcomes are known.
+    """
     if predictions.empty:
         return {'n_predictions': 0, 'note': 'No predictions logged yet.'}
 
@@ -108,7 +188,7 @@ def report(predictions: pd.DataFrame, ref_scores: np.ndarray) -> dict:
         .round(4)
     )
 
-    return {
+    result = {
         'n_predictions': int(len(predictions)),
         'window': (predictions['ts'].min().isoformat(),
                    predictions['ts'].max().isoformat()),
@@ -120,6 +200,20 @@ def report(predictions: pd.DataFrame, ref_scores: np.ndarray) -> dict:
         'reject_rate': round(float((predictions['decision'] == 'reject').mean()), 4),
         'daily_table': daily,
     }
+
+    if truth is not None:
+        joined = join_outcomes(predictions, truth)
+        if joined.empty:
+            result['realized_note'] = (
+                'No logged predictions matched a ground-truth label '
+                '(missing application_id, or outcomes not in yet).')
+        else:
+            realized = realized_metrics(joined['actual'], joined['p_default'])
+            realized['n_unlabeled'] = int(len(predictions) - len(joined))
+            result['realized'] = realized
+            result['realized_monthly'] = realized_monthly(joined)
+
+    return result
 
 
 def print_report(r: dict) -> None:
@@ -140,6 +234,20 @@ def print_report(r: dict) -> None:
     print('  daily:')
     print(r['daily_table'].to_string())
 
+    if 'realized' in r:
+        m = r['realized']
+        auc = f'{m["roc_auc"]:.4f}' if m['roc_auc'] is not None else 'n/a (single class)'
+        ks = f'{m["ks"]:.4f}' if m['ks'] is not None else 'n/a'
+        print('\n  realized performance (labeled subset):')
+        print(f'    labeled / unlabeled:  {m["n"]:,} / {m["n_unlabeled"]:,}')
+        print(f'    actual default rate:  {m["actual_default_rate"]:.4f}  '
+              f'(mean predicted {m["mean_p_default"]:.4f})')
+        print(f'    Brier: {m["brier"]:.4f}   ROC-AUC: {auc}   KS: {ks}')
+        print('\n  realized by month:')
+        print(r['realized_monthly'].to_string())
+    elif 'realized_note' in r:
+        print(f'\n  realized performance:  {r["realized_note"]}')
+
     if r['psi_band'] == 'SIGNIFICANT':
         print('\n  ALERT: PSI in significant-drift band - schedule a model refresh.')
     elif r['psi_band'] == 'MODERATE':
@@ -150,15 +258,26 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description='Production-monitoring report.')
     parser.add_argument('--since', default=None, help='ISO date (YYYY-MM-DD).')
     parser.add_argument('--model', default='xgb_v4_interactions')
+    parser.add_argument('--truth', default=None,
+                        help='CSV/parquet of realized outcomes for the labeled subset.')
+    parser.add_argument('--id-col', default='application_id',
+                        help='ID column in the ground-truth file (default: application_id).')
+    parser.add_argument('--label-col', default='default',
+                        help='0/1 outcome column in the ground-truth file (default: default).')
     args = parser.parse_args(argv)
 
     since = None
     if args.since:
         since = datetime.fromisoformat(args.since).replace(tzinfo=UTC)
 
+    truth = None
+    if args.truth:
+        truth = load_ground_truth(Path(args.truth),
+                                  id_col=args.id_col, label_col=args.label_col)
+
     preds = load_predictions(since)
     ref = reference_train_scores(args.model)
-    r = report(preds, ref)
+    r = report(preds, ref, truth=truth)
     print_report(r)
     return 0
 

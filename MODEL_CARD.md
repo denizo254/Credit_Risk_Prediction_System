@@ -168,4 +168,6 @@ The production deployment via `src/serve.py` logs every prediction to `outputs/l
 - **0.10 ≤ PSI < 0.25:** investigate; check feature-level drift.
 - **PSI ≥ 0.25 sustained for 7+ days:** trigger model refresh (recalibrate, then retrain if needed).
 
+PSI is a no-label *input*-drift signal. Once loan outcomes mature, `monitor.py --truth <file>` joins them to logged predictions on `application_id` and reports **realized Brier / ROC-AUC / KS, overall and by month** — the *output*-accuracy signal. This is the loop that detects the calibration drift noted above: a rising actual-vs-predicted gap is the trigger to recalibrate the isotonic layer.
+
 PSI computation is suppressed below 1,000 logged predictions to avoid empty-bin blow-up in the log-ratio.
