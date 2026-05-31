@@ -14,11 +14,14 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from load import INTERIM_PARQUET
 from prepare import (
-    CATEGORICAL_COLS, TRAIN_PARQUET, TEST_PARQUET,
-    TRAIN_MAX_YEAR, TEST_MIN_YEAR,
-    clean, time_split,
+    CATEGORICAL_COLS,
+    TEST_MIN_YEAR,
+    TEST_PARQUET,
+    TRAIN_MAX_YEAR,
+    TRAIN_PARQUET,
+    clean,
+    time_split,
 )
-
 
 t0 = time.time()
 print(f'Loading {INTERIM_PARQUET.name} ...')

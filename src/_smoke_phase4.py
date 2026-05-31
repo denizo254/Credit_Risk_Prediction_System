@@ -11,13 +11,11 @@ import warnings
 from pathlib import Path
 
 import joblib
-import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from models import build_lr, build_xgb, evaluate, model_path, split_xy
 from prepare import load_processed
-from models import build_lr, build_xgb, split_xy, evaluate, model_path
-
 
 # LogisticRegression with OHE'd 100+ columns sometimes warns on convergence
 # at max_iter=200. The smoke is happy with a near-converged model — full

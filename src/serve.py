@@ -25,22 +25,21 @@ from __future__ import annotations
 import json
 import logging
 import os
+import sys
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
+from typing import Literal
 
 import joblib
-import numpy as np
 import pandas as pd
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
-import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from prepare import CATEGORICAL_COLS, load_processed_featv2
 from features import add_interactions
 from models import model_path
+from prepare import CATEGORICAL_COLS, load_processed_featv2
 
 # Operating threshold from Phase 5's cost-curve analysis (c_fn:c_fp = 5:1).
 # Override via env var without code change.
@@ -58,39 +57,55 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name
 # ---------- Pydantic schema ----------
 
 class LoanApplication(BaseModel):
-    """Prepared (post-Phase-3) features. Numeric NaN allowed where the pipeline
-    expects to impute (`emp_length`, `dti`, `revol_util`, etc.)."""
+    """Prepared (post-Phase-3) features for a single application.
+
+    Bounds reject obviously-malformed input (negatives, absurd magnitudes)
+    before it reaches the model — without that, a typo like a negative income
+    or a 9999% rate scores silently as garbage. Ranges are intentionally
+    *permissive* (wider than the training data) so plausible real applications
+    are never rejected; the goal is to catch nonsense, not to re-underwrite.
+
+    Optional numeric fields accept None (the pipeline / XGBoost impute the
+    missing value); when a value IS supplied it must satisfy the bound.
+    Categorical strings are validated against the training distribution at
+    score time — unknown levels pass through as NaN (XGBoost handles them).
+    """
+    # extra='forbid' turns an unexpected/misspelled field into a 422 instead of
+    # silently ignoring it (which would score on defaults for the real field).
+    model_config = ConfigDict(extra='forbid')
+
     # Loan
-    loan_amnt: float
-    term: int = Field(..., description='Loan term in months (36 or 60)')
-    int_rate: float
-    installment: float
+    loan_amnt: float = Field(gt=0, le=100_000)
+    term: Literal[36, 60] = Field(description='Loan term in months (36 or 60)')
+    int_rate: float = Field(gt=0, le=100, description='Annual rate in percent')
+    installment: float = Field(gt=0, le=10_000)
     # LC rating
-    grade: str
-    sub_grade: str
+    grade: str = Field(min_length=1, max_length=2)
+    sub_grade: str = Field(min_length=1, max_length=3)
     # Borrower
-    emp_length: Optional[float] = None
-    emp_length_missing: int = 0
-    home_ownership: str
-    annual_inc: float
-    verification_status: str
+    emp_length: float | None = Field(default=None, ge=0, le=10)
+    emp_length_missing: Literal[0, 1] = 0
+    home_ownership: str = Field(min_length=1, max_length=20)
+    annual_inc: float = Field(ge=0, le=100_000_000)
+    verification_status: str = Field(min_length=1, max_length=30)
     # Loan context
-    purpose: str
-    addr_state: str
-    application_type: str
+    purpose: str = Field(min_length=1, max_length=40)
+    addr_state: str = Field(min_length=2, max_length=2, description='US state code')
+    application_type: str = Field(min_length=1, max_length=20)
     # Debt load
-    dti: Optional[float] = None
-    revol_util: Optional[float] = None
-    revol_bal: float
+    # LendingClub uses -1 as a sentinel for dti, so the floor allows it through.
+    dti: float | None = Field(default=None, ge=-1, le=1000)
+    revol_util: float | None = Field(default=None, ge=0, le=1000)
+    revol_bal: float = Field(ge=0, le=100_000_000)
     # Credit bureau
-    fico_mean: float
-    delinq_2yrs: Optional[float] = None
-    pub_rec: Optional[float] = None
-    pub_rec_bankruptcies: int = 0
-    mort_acc: int = 0
-    open_acc: Optional[float] = None
-    total_acc: Optional[float] = None
-    credit_history_years: Optional[int] = None
+    fico_mean: float = Field(ge=300, le=850, description='FICO score (300-850)')
+    delinq_2yrs: float | None = Field(default=None, ge=0, le=100)
+    pub_rec: float | None = Field(default=None, ge=0, le=100)
+    pub_rec_bankruptcies: int = Field(default=0, ge=0, le=100)
+    mort_acc: int = Field(default=0, ge=0, le=100)
+    open_acc: float | None = Field(default=None, ge=0, le=200)
+    total_acc: float | None = Field(default=None, ge=0, le=200)
+    credit_history_years: int | None = Field(default=None, ge=0, le=100)
 
 
 class PredictResponse(BaseModel):
@@ -160,7 +175,7 @@ def _decision(p: float) -> str:
 def _log_prediction(record: dict, p: float, decision: str) -> None:
     """Append-only JSONL log for offline monitoring."""
     entry = {
-        'ts': datetime.now(timezone.utc).isoformat(),
+        'ts': datetime.now(UTC).isoformat(),
         'p_default': p,
         'decision': decision,
         'threshold': DECISION_THRESHOLD,
@@ -208,12 +223,12 @@ def predict_batch(req: BatchRequest) -> BatchResponse:
     df = _to_dataframe(records)
     probs = ServiceState.model.predict_proba(df)[:, 1].astype(float)
     decisions = [_decision(p) for p in probs]
-    for rec, p, d in zip(records, probs, decisions):
+    for rec, p, d in zip(records, probs, decisions, strict=False):
         _log_prediction(rec, float(p), d)
     return BatchResponse(predictions=[
         PredictResponse(p_default=float(p), decision=d,
                         threshold=DECISION_THRESHOLD, model=MODEL_NAME)
-        for p, d in zip(probs, decisions)
+        for p, d in zip(probs, decisions, strict=False)
     ])
 
 

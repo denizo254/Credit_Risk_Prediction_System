@@ -9,11 +9,10 @@ import sys
 import time
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from load import RAW_CSV, FEATURE_COLS, TARGET_COL, derive_default_flag, INTERIM_PARQUET
+from load import FEATURE_COLS, INTERIM_PARQUET, RAW_CSV, TARGET_COL, derive_default_flag
 
 t0 = time.time()
 print(f'Reading {RAW_CSV.name} ({RAW_CSV.stat().st_size / 1e9:.2f} GB)...')

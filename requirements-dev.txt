@@ -1,0 +1,8 @@
+# Development / test tooling — install on top of requirements.txt:
+#     pip install -r requirements.txt -r requirements-dev.txt
+#
+# For an exact, fully reproducible environment (the versions this project was
+# developed and tested against), install the pinned snapshot instead:
+#     pip install -r requirements.lock
+pytest>=8.0
+ruff>=0.6

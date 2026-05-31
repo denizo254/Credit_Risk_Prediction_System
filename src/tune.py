@@ -23,7 +23,6 @@ Why ROC-AUC instead of PR-AUC inside CV:
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Iterable
 
 import numpy as np
 import pandas as pd
@@ -109,7 +108,7 @@ def random_search(
     results = []
     for trial_idx, params in enumerate(trials):
         fold_scores = []
-        for fold_idx, (tr, te) in enumerate(cv.split(X_sub)):
+        for _fold_idx, (tr, te) in enumerate(cv.split(X_sub)):
             X_tr, y_tr = X_sub.iloc[tr], y_sub.iloc[tr]
             X_te, y_te = X_sub.iloc[te], y_sub.iloc[te]
             model = build_xgb(y_tr, **params)

@@ -53,7 +53,9 @@ Reported on the 2017-2018 out-of-time test set (244,959 loans, base default rate
 | **Log-loss** | 0.5335 | Penalizes confidently wrong predictions |
 | **KS statistic** | 0.2989 | Max separation of score CDFs (defaults vs repays) |
 | **Decile-1 lift** | 1.94× | Top 10% of risk scores capture 19.4% of defaults |
-| **PSI(train → test)** | 0.011 | Stable — score distribution does not drift |
+| **PSI(train → test)** | 0.011 | Stable — score *distribution shape* is unchanged (but see the calibration note below) |
+
+> **PSI stability ≠ calibrated probabilities.** A low PSI means the *shape* of the score distribution barely moves between train and test — it does **not** mean the probabilities are accurate out-of-time. The 2017-2018 test default rate (27.2%) is higher than the 2016 calibration year (24.7%), so the isotonic layer (fit on 2016) **systematically under-predicts on test by ~2 pp** (mean predicted ≈ 0.251 vs. observed 0.272). Rank-ordering (ROC-AUC, KS) is unaffected — those metrics are invariant to a monotone miscalibration — but absolute probabilities run low and should be recalibrated on recent outcomes before being read as true default rates, most consequentially near the `t = 0.13` threshold. This is exactly what the [rolling-recalibration recommendation](#recommendations-for-further-work) addresses.
 
 ### Decision threshold
 - **Operating threshold:** `t = 0.13` (predict default iff `P(default) ≥ 0.13`).
@@ -61,7 +63,7 @@ Reported on the 2017-2018 out-of-time test set (244,959 loans, base default rate
 - **At `t = 0.13` on the test set:** precision 32.8%, recall 91.0% — the model catches 91% of defaults at the cost of false-rejecting two thirds of those it flags. This trade-off is correct *for the stated 5:1 cost ratio* and must be re-derived if the business cost ratio changes.
 
 ### Approaches to uncertainty
-Isotonic calibration on a held-out 2016 slice produces probabilities that approximately match observed default rates within their predicted bin (Phase 5 reliability diagrams). The model does *not* expose epistemic uncertainty (e.g., bootstrap variance, prediction intervals) — every score is a point estimate. Phase 7 random search measured CV-fold standard deviation of ~0.01 on ROC-AUC, so absolute test-set numbers should be read with that grain of salt.
+Isotonic calibration on a held-out 2016 slice produces probabilities that approximately match observed default rates within their predicted bin *on the 2016 calibration data* (Phase 5 reliability diagrams). On the later 2017-2018 test set the same calibrator under-predicts the overall default rate by ~3 pp (see the PSI/calibration note under [Metrics](#metrics)) because the population's default rate rose after 2016. The model does *not* expose epistemic uncertainty (e.g., bootstrap variance, prediction intervals) — every score is a point estimate. Phase 7 random search measured CV-fold standard deviation of ~0.01 on ROC-AUC, so absolute test-set numbers should be read with that grain of salt.
 
 ## Evaluation data
 

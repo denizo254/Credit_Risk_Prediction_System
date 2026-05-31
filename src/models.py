@@ -19,9 +19,9 @@ work in CV, in the notebook, and in the smoke test.
 """
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
 
 import numpy as np
 import pandas as pd
@@ -29,7 +29,10 @@ from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
-    average_precision_score, brier_score_loss, log_loss, roc_auc_score,
+    average_precision_score,
+    brier_score_loss,
+    log_loss,
+    roc_auc_score,
 )
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler

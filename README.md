@@ -159,6 +159,7 @@ Full intended-use, limitations, and fair-lending considerations live in [`MODEL_
 1. **Test-set ceiling is real.** Phase 7 tuning improved CV ROC-AUC by +0.023 but only +0.004 on test. Phase 8 interactions added another +0.001. The gap is concept drift between 2007-2016 training and 2017-2018 test — no amount of training-distribution work closes it.
 2. **2018 horizon is survivorship-biased.** 2018 loans haven't had 60 months to mature; observed default rate of 27% is a lower bound. Real long-run performance will be worse.
 3. **Decile-1 lift of 1.94× is operationally useful, not best-in-class.** A specialist credit-risk team would expect 3×+. The unclosed gap is in *features that scale with the test horizon*, not more tuning.
+4. **Calibrated probabilities run low out-of-time.** PSI(train→test) is a stable 0.011 — but that only says the score *shape* holds steady, not that the probabilities are right. The 2017-2018 default rate (27.2%) tops the 2016 calibration year (24.7%), so the isotonic layer under-predicts on test by ~2 pp (mean predicted ≈25% vs observed 27%). Rank-ordering is unaffected; the *levels* need rolling recalibration (see below). Don't read a low PSI as "probabilities are accurate."
 
 ## Where the next gain actually lives
 

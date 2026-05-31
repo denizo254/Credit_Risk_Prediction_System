@@ -19,9 +19,9 @@ import joblib
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from prepare import CATEGORICAL_COLS, load_processed_featv2
 from features import INTERACTION_COLS, add_interactions
 from models import model_path
+from prepare import CATEGORICAL_COLS, load_processed_featv2
 
 DEFAULT_THRESHOLD = 0.13
 DEFAULT_MODEL = 'xgb_v4_interactions'
@@ -53,6 +53,19 @@ def _align_categoricals(df: pd.DataFrame, categories: dict[str, list]) -> pd.Dat
     return df
 
 
+def _missing_required(df_columns, feature_order: list[str]) -> list[str]:
+    """Required input columns absent from the data.
+
+    The 7 INTERACTION_COLS are derived at score time (from base features), so
+    they're optional in the input; every other column in `feature_order` is
+    required. Without this check a missing column is silently reindexed to
+    all-NaN and scored as garbage.
+    """
+    required = [c for c in feature_order if c not in INTERACTION_COLS]
+    have = set(df_columns)
+    return [c for c in required if c not in have]
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description='Batch score loan applications.')
     parser.add_argument('--input', required=True, type=Path)
@@ -72,6 +85,17 @@ def main(argv: list[str] | None = None) -> int:
     print(f'Reading {args.input}...')
     df = _read(args.input)
     print(f'  {len(df):,} rows')
+
+    # Fail loud on a malformed input rather than silently scoring NaN-filled
+    # columns. The 7 interaction features are exempt — they're derived below.
+    missing = _missing_required(df.columns, feature_order)
+    if missing:
+        raise SystemExit(
+            f'ERROR: input {args.input} is missing {len(missing)} required '
+            f'column(s): {", ".join(missing)}\n'
+            f'Expected the Phase-3 prepared shape '
+            f'({len(feature_order) - len(INTERACTION_COLS)} base features).'
+        )
 
     # If the input is a v1-feature parquet (no interactions), compute them.
     if not all(c in df.columns for c in INTERACTION_COLS):

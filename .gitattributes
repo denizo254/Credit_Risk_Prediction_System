@@ -1,0 +1,23 @@
+# Normalize line endings: text files are stored as LF in the repo and checked
+# out as-is. Prevents the "LF will be replaced by CRLF" churn on Windows.
+* text=auto eol=lf
+
+# Explicit text types
+*.py    text eol=lf
+*.toml  text eol=lf
+*.ini   text eol=lf
+*.cfg   text eol=lf
+*.txt   text eol=lf
+*.md    text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.json  text eol=lf
+*.ipynb text eol=lf
+
+# Binary artifacts — never normalize or diff as text
+*.joblib  binary
+*.parquet binary
+*.csv     binary
+*.png     binary
+*.jpg     binary
+*.jsonl   binary

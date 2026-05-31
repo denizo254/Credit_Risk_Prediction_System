@@ -10,18 +10,18 @@ import warnings
 from pathlib import Path
 
 import joblib
-import numpy as np
-import pandas as pd
 from sklearn.isotonic import IsotonicRegression
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from prepare import load_processed
-from models import build_xgb, split_xy, evaluate, model_path
 from evaluate import (
-    time_calibration_split, CalibratedXGB,
-    BASE_MAX_YEAR, CALIB_YEAR,
+    BASE_MAX_YEAR,
+    CALIB_YEAR,
+    CalibratedXGB,
+    time_calibration_split,
 )
-from tune import random_search, best_params_from, DEFAULT_PARAMS
+from models import build_xgb, evaluate, model_path, split_xy
+from prepare import load_processed
+from tune import best_params_from, random_search
 
 warnings.filterwarnings('ignore', category=UserWarning)
 
@@ -91,7 +91,7 @@ print(f'  Saved -> {model_path("xgb_v3_tuned")}')
 # -------- Evaluate on test --------
 p_test = cal_xgb.predict_proba(X_test)[:, 1]
 m_test = evaluate(y_test, p_test)
-print(f'\n=== xgb_v3_tuned on TEST ===')
+print('\n=== xgb_v3_tuned on TEST ===')
 print(f'  {fmt(m_test)}')
 
 # Compare against xgb_v2_calibrated for an apples-to-apples read

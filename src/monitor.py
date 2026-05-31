@@ -25,7 +25,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import joblib
@@ -33,9 +33,9 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from prepare import load_processed_featv2, CATEGORICAL_COLS
-from models import split_xy, model_path
 from evaluate import psi
+from models import model_path, split_xy
+from prepare import load_processed_featv2
 
 PROJECT = Path(__file__).resolve().parent.parent
 LOG_PATH = PROJECT / 'outputs' / 'logs' / 'predictions.jsonl'
@@ -123,7 +123,7 @@ def report(predictions: pd.DataFrame, ref_scores: np.ndarray) -> dict:
 
 
 def print_report(r: dict) -> None:
-    print(f'\n=== Monitoring report ===')
+    print('\n=== Monitoring report ===')
     if r.get('n_predictions', 0) == 0:
         print(f'  {r["note"]}')
         return
@@ -154,7 +154,7 @@ def main(argv: list[str] | None = None) -> int:
 
     since = None
     if args.since:
-        since = datetime.fromisoformat(args.since).replace(tzinfo=timezone.utc)
+        since = datetime.fromisoformat(args.since).replace(tzinfo=UTC)
 
     preds = load_predictions(since)
     ref = reference_train_scores(args.model)

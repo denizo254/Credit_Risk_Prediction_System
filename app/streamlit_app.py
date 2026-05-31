@@ -20,9 +20,9 @@ import streamlit as st
 PROJECT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT / 'src'))
 
-from prepare import CATEGORICAL_COLS, load_processed_featv2  # noqa: E402
 from features import add_interactions  # noqa: E402
 from models import model_path  # noqa: E402
+from prepare import CATEGORICAL_COLS, load_processed_featv2  # noqa: E402
 
 # LendingClub-published default rates by grade (Phase 2 finding) — for the
 # "vs LC grade expectation" context display.

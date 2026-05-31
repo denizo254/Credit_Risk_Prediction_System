@@ -1,0 +1,34 @@
+# Ruff configuration for the Credit Risk Prediction System.
+# Run locally:  ruff check .        (lint)
+#               ruff check --fix .  (auto-fix)
+# CI runs `ruff check .` on every push (see .github/workflows/ci.yml).
+
+line-length = 100
+target-version = "py313"
+# Notebooks are exploratory: the standard `sys.path.insert(...)` -> `from src
+# import ...` pattern trips E402, and IPython line magics (`%time x = ...`)
+# read as F821 undefined-name to a static linter. Lint the library, not the lab.
+extend-exclude = ["notebooks"]
+
+[lint]
+# E/W = pycodestyle, F = pyflakes, I = isort, UP = pyupgrade, B = flake8-bugbear.
+select = ["E", "F", "W", "I", "UP", "B"]
+# E501 (line-too-long) is intentionally not enforced — long lines here are
+# mostly print/log strings and explanatory comments, not logic worth reflowing.
+ignore = ["E501"]
+
+[lint.per-file-ignores]
+# The serving / CLI / demo entrypoints intentionally manipulate sys.path before
+# importing the src modules, so imports aren't all at the top of the file.
+"src/serve.py" = ["E402"]
+"src/score_batch.py" = ["E402"]
+"src/monitor.py" = ["E402"]
+"src/_smoke_*.py" = ["E402"]
+"app/streamlit_app.py" = ["E402"]
+
+[lint.isort]
+# Treat the project's own flat modules as first-party so imports group correctly.
+known-first-party = [
+    "load", "prepare", "features", "models", "tune",
+    "evaluate", "serve", "score_batch", "monitor",
+]

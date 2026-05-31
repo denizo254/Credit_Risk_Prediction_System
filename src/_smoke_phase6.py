@@ -8,7 +8,6 @@ Steps:
 """
 from __future__ import annotations
 
-import json
 import subprocess
 import sys
 import time
@@ -18,9 +17,9 @@ import pandas as pd
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from prepare import load_processed, CATEGORICAL_COLS
-import serve as serve_module
 import monitor
+import serve as serve_module
+from prepare import CATEGORICAL_COLS, load_processed
 
 PROJECT = Path(__file__).resolve().parent.parent
 LOG_PATH = PROJECT / 'outputs' / 'logs' / 'predictions.jsonl'
