@@ -157,7 +157,7 @@ At `t = 0.13`, the model **rejects 67% of applications it flags as risky**. Fals
 5. **No bureau-attribute updates.** The model assumes the borrower's bureau snapshot at application time is current. In production, the input pipeline must enforce this.
 
 ### Recommendations for further work
-- **Rolling recalibration in production.** Refit only the isotonic layer on rolling-12-month labeled outcomes. Cheapest fix; most responsive to actual drift.
+- **Rolling recalibration in production.** *Implemented* in `src/recalibrate.py`: freezes the base XGB and refits only the isotonic layer on a recent labeled window. On this dataset, recalibrating on 2017 cut the 2018 mean-predicted-vs-observed gap from −2.8 pp to −0.9 pp (Brier 0.1791 → 0.1783) with ROC-AUC/KS unchanged. Cheapest fix; most responsive to the calibration drift `monitor.py --truth` surfaces.
 - **Sub-grade-conditional specialists.** Fit small models per grade band (A-B, C-D, E-G), route by grade at score time. Per-grade KS variability (0.13 → 0.22) suggests different bands respond to different signals.
 - **External macro features.** Unemployment rate, prime-rate at issue date, regional economic indicators — these would directly address the concept drift the in-distribution model cannot internally see.
 - **Fair-lending audit.** Before any regulated-context deployment, run disparate-impact analyses using available proxy variables and any matched demographic dataset.

@@ -9,15 +9,19 @@ Production model is **`xgb_v4_interactions`** — XGBoost with isotonic calibrat
 ```
 src/                   Importable modules + smoke tests (one per phase)
   load.py              Raw CSV loader, target derivation
+  contracts.py         validate_curated() — load->prepare schema contract
   prepare.py           clean(), time_split(), featv2 paths
   features.py          add_interactions() — 7 interaction features
   models.py            build_lr(), build_xgb(), evaluate(), Metrics
   evaluate.py          calibration, cost_curve, gains, PSI, per-group metrics
   tune.py              random search with time-series CV
+  explain.py           TreeSHAP reason codes for a prediction
   serve.py             FastAPI app: /health, /predict, /predict/batch
   score_batch.py       CLI batch scorer
-  monitor.py           prediction-log analyzer (PSI / reject-rate / Brier)
+  monitor.py           prediction-log analyzer (PSI / realized Brier-AUC-KS)
+  recalibrate.py       rolling isotonic recalibration on recent outcomes
   _smoke_phase{2..8}.py  end-to-end runners for each phase
+tests/                 pytest unit suite (pure functions, schema, API, monitoring)
 notebooks/             One notebook per CRISP-DM phase, with rationale
 app/
   streamlit_app.py     Demo UI — single-application scoring with sidebar threshold control
@@ -182,7 +186,12 @@ Full intended-use, limitations, and fair-lending considerations live in [`MODEL_
 
 ## Where the next gain actually lives
 
-1. **Rolling recalibration.** Once production accumulates a year of labeled outcomes, refit just the isotonic on rolling-12-month data. The base XGB stays the same; the calibrator adapts to drift. Cheapest fix; most responsive to the actual problem.
+1. **Rolling recalibration.** *Implemented* — `src/recalibrate.py` freezes the base XGB and refits only the isotonic layer on a recent labeled window. Demonstrated value: recalibrating on 2017 cuts the 2018 calibration gap from −2.8 pp to −0.9 pp and improves Brier, with ranking (ROC-AUC/KS) unchanged. The `monitor.py --truth` loop is the trigger; this is the response.
+
+   ```bash
+   python src/recalibrate.py --calib recent_labeled.parquet --out xgb_v5_recalibrated
+   # then deploy it:  MODEL_NAME=xgb_v5_recalibrated python src/serve.py
+   ```
 2. **Sub-grade-conditional specialists.** Per-grade KS in Phase 5 varied 0.13 → 0.22. Fit small specialists per grade band (A-B, C-D, E-G), route at score time. Each specialist sees a narrower default-rate range.
 3. **External signals.** Macro indicators (unemployment, prime rate at issue date) — these are exactly the variables driving the 2017-2018 drift the model can't internally see.
 
